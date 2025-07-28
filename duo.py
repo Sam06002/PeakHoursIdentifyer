@@ -393,11 +393,19 @@ def analyze_time_periods(df):
 if 'df' not in st.session_state:
     st.session_state.df = None
 
+# Initialize target session states
+if 'daily_target' not in st.session_state:
+    st.session_state.daily_target = 10000
+if 'weekly_target' not in st.session_state:
+    st.session_state.weekly_target = 70000
+if 'monthly_target' not in st.session_state:
+    st.session_state.monthly_target = 300000
+
 # Sidebar navigation
 st.sidebar.title("Navigation")
 page = st.sidebar.selectbox(
     "Select Analysis",
-    ["Data Overview", "Peak Hours Analysis", "Revenue Trends Analysis"]
+    ["Data Overview", "Peak Hours Analysis", "Revenue Trends Analysis", "Sales Target Performance"]
 )
 
 # Add clear data button
@@ -680,5 +688,190 @@ elif page == "Revenue Trends Analysis":
                 
         except Exception as e:
             st.error(f"Error in revenue trends analysis: {str(e)}")
+    else:
+        st.warning("Please upload data in the 'Data Overview' section first.")
+
+elif page == "Sales Target Performance":
+    st.header("🎯 Sales Target Performance")
+    
+    # Instructions
+    st.markdown("""
+    ### Performance Against Sales Targets
+    
+    Set your sales targets and track your actual performance against them.
+    This helps you understand if you're meeting your business goals and identify areas for improvement.
+    """)
+    
+    if st.session_state.df is not None:
+        df = st.session_state.df
+        
+        st.success("✅ Using previously loaded data!")
+        
+        # Target Setting Section
+        st.subheader("📊 Set Your Sales Targets")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            daily_target = st.number_input(
+                "Daily Revenue Target (₹)", 
+                min_value=0, 
+                value=st.session_state.get('daily_target', 10000),
+                step=1000
+            )
+        
+        with col2:
+            weekly_target = st.number_input(
+                "Weekly Revenue Target (₹)", 
+                min_value=0, 
+                value=st.session_state.get('weekly_target', 70000),
+                step=5000
+            )
+        
+        with col3:
+            monthly_target = st.number_input(
+                "Monthly Revenue Target (₹)", 
+                min_value=0, 
+                value=st.session_state.get('monthly_target', 300000),
+                step=10000
+            )
+        
+        if st.button("💾 Save Targets"):
+            st.session_state.daily_target = daily_target
+            st.session_state.weekly_target = weekly_target
+            st.session_state.monthly_target = monthly_target
+            st.success("Targets saved successfully!")
+        
+        # Performance Analysis
+        if all(key in st.session_state for key in ['daily_target', 'weekly_target', 'monthly_target']):
+            st.markdown("---")
+            st.subheader("📈 Performance Analysis")
+            
+            try:
+                # Calculate actual performance
+                total_revenue = df['total'].sum()
+                unique_hours = df['hour'].nunique()
+                
+                # Calculate averages (simulating daily/weekly performance)
+                daily_avg = total_revenue / max(1, unique_hours / 24) if unique_hours > 0 else 0
+                weekly_avg = daily_avg * 7
+                monthly_performance = total_revenue  # Treat current data as monthly sample
+                
+                # Calculate achievement percentages
+                daily_achievement = (daily_avg / st.session_state.daily_target) * 100 if st.session_state.daily_target > 0 else 0
+                weekly_achievement = (weekly_avg / st.session_state.weekly_target) * 100 if st.session_state.weekly_target > 0 else 0
+                monthly_achievement = (monthly_performance / st.session_state.monthly_target) * 100 if st.session_state.monthly_target > 0 else 0
+                
+                # Display performance metrics
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.metric(
+                        "Daily Performance", 
+                        f"{daily_achievement:.1f}%",
+                        f"₹{daily_avg:,.0f} / ₹{st.session_state.daily_target:,.0f}"
+                    )
+                
+                with col2:
+                    st.metric(
+                        "Weekly Performance", 
+                        f"{weekly_achievement:.1f}%",
+                        f"₹{weekly_avg:,.0f} / ₹{st.session_state.weekly_target:,.0f}"
+                    )
+                
+                with col3:
+                    st.metric(
+                        "Monthly Performance", 
+                        f"{monthly_achievement:.1f}%",
+                        f"₹{monthly_performance:,.0f} / ₹{st.session_state.monthly_target:,.0f}"
+                    )
+                
+                # Performance Chart
+                st.subheader("🎯 Target Achievement Overview")
+                
+                performance_data = pd.DataFrame({
+                    'Period': ['Daily', 'Weekly', 'Monthly'],
+                    'Achievement': [daily_achievement, weekly_achievement, monthly_achievement],
+                    'Target': [100, 100, 100]
+                })
+                
+                fig = px.bar(
+                    performance_data,
+                    x='Period',
+                    y='Achievement',
+                    title='Target Achievement Percentage',
+                    color='Achievement',
+                    color_continuous_scale=['red', 'yellow', 'green'],
+                    range_color=[0, 150]
+                )
+                
+                # Add target line at 100%
+                fig.add_hline(
+                    y=100,
+                    line_dash='dash',
+                    line_color='black',
+                    annotation_text='Target (100%)',
+                    annotation_position='right'
+                )
+                
+                fig.update_layout(
+                    yaxis_title='Achievement (%)',
+                    showlegend=False,
+                    height=400
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Business Insights
+                with st.expander("📊 Performance Insights", expanded=True):
+                    st.markdown("### Target Performance Analysis")
+                    
+                    insights = []
+                    
+                    # Overall performance insight
+                    avg_performance = (daily_achievement + weekly_achievement + monthly_achievement) / 3
+                    if avg_performance >= 100:
+                        insights.append("🎉 **Excellent Performance!** You're consistently exceeding your sales targets across all periods.")
+                    elif avg_performance >= 80:
+                        insights.append("👍 **Good Performance!** You're close to your targets. Small improvements can help you exceed them.")
+                    else:
+                        insights.append("⚠️ **Below Target Performance.** Consider analyzing your peak hours and revenue trends to identify improvement opportunities.")
+                    
+                    # Specific period insights
+                    if daily_achievement < 80:
+                        insights.append("📅 **Daily Target:** Focus on increasing daily sales through promotions or extended hours during peak times.")
+                    
+                    if weekly_achievement >= 100:
+                        insights.append("📊 **Weekly Strength:** Your weekly performance is strong. Consider replicating successful strategies.")
+                    
+                    if monthly_achievement < 90:
+                        insights.append("📈 **Monthly Focus:** Your monthly performance needs attention. Consider seasonal marketing or menu optimization.")
+                    
+                    # Best performing period
+                    best_period = performance_data.loc[performance_data['Achievement'].idxmax(), 'Period']
+                    insights.append(f"🏆 **Best Performance:** Your {best_period.lower()} performance is strongest at {performance_data['Achievement'].max():.1f}%.")
+                    
+                    for insight in insights:
+                        st.markdown(f"- {insight}")
+                    
+                    # Recommendations
+                    st.markdown("### 💡 Recommendations")
+                    if avg_performance < 90:
+                        st.markdown("- Review your peak hours analysis to identify underutilized time slots")
+                        st.markdown("- Consider promotional activities during slow periods")
+                        st.markdown("- Analyze your most profitable menu items and promote them")
+                    else:
+                        st.markdown("- Maintain current successful strategies")
+                        st.markdown("- Consider increasing targets for continued growth")
+                        st.markdown("- Explore expansion opportunities")
+                    
+                    st.caption(f"*Analysis generated on {datetime.now().strftime('%B %d, %Y at %I:%M %p')}*")
+            
+            except Exception as e:
+                st.error(f"Error in target performance analysis: {str(e)}")
+        
+        else:            
+            st.info("👆 Please set your sales targets above to see performance analysis.")
+    
     else:
         st.warning("Please upload data in the 'Data Overview' section first.")
